@@ -1,6 +1,6 @@
-# Deep Kernel GP - Minimal Version
+# DKGP
 
-Deep Kernel Learning for Gaussian Process Regression - Essential Components Only
+Deep Kernel Learning for Gaussian Process Regression and Classification
 
 ## Installation
 
@@ -38,7 +38,7 @@ ei = expected_improvement(dkl_model, X_test, best_f)
 
 ## What's Included
 
-### Source Code (src/deep_kernel_gp/)
+### Source Code (src/dkgp/)
 - models.py - Core model classes
 - training.py - Training functions
 - prediction.py - Prediction utilities
@@ -53,6 +53,3 @@ ei = expected_improvement(dkl_model, X_test, best_f)
 - README.md - This file
 - LICENSE - MIT License
 
-## License
-
-MIT License

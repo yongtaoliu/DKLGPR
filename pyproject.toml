@@ -3,14 +3,13 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "deep-kernel-gp"
+name = "dkgp"
 version = "0.1.0"
-description = "Deep Kernel Learning for Gaussian Process Regression"
+description = "Deep Kernel Gaussian Process Regression and Classification"
 readme = "README.md"
 authors = [
-    {name = "Your Name", email = "your.email@example.com"}
+    {name = "Yongtao Liu", email = "youngtaoliu@gmail.com"}
 ]
-license = {text = "MIT"}
 requires-python = ">=3.8"
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -21,7 +20,7 @@ classifiers = [
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
-    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence :: Imaging :: Microscopy :: Autonomous Experiment :: Self-Driving Lab",
 ]
 dependencies = [
     "torch>=2.0.0",
@@ -48,10 +47,8 @@ docs = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/yourusername/deep-kernel-gp"
-Documentation = "https://deep-kernel-gp.readthedocs.io"
-Repository = "https://github.com/yourusername/deep-kernel-gp"
-"Bug Tracker" = "https://github.com/yourusername/deep-kernel-gp/issues"
+Homepage = "https://github.com/yongtaoliu/DKGP"
+Repository = "https://github.com/yongtaoliu/DKGP"
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -69,7 +66,7 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-addopts = "--cov=deep_kernel_gp --cov-report=html --cov-report=term"
+addopts = "--cov=dkgp --cov-report=html --cov-report=term"
 
 [tool.mypy]
 python_version = "3.8"

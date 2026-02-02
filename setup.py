@@ -1,5 +1,5 @@
 """
-Setup script for deep-kernel-gp package.
+Setup script for dkgp package.
 
 This file exists for backwards compatibility with older pip versions.
 Modern installations should use pyproject.toml.
