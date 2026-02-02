@@ -141,7 +141,7 @@ class DeepKernelGPClassifier(nn.Module):
                 probs = torch.stack([prob_0, prob_1], dim=-1)
             else:
                 # Multi-class classification
-                probs = torch.softmax(output.mean, dim=-1)
+                probs = torch.softmax(output.mean, dim=0).T
             
         return probs
     
