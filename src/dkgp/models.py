@@ -238,7 +238,7 @@ class DeepKernelGP(nn.Module):
         )
 
         self.train_datapoints = datapoints
-        self.train_targets = targets
+        self.train_targets = targets.squeeze() if targets.ndim > 1 else targets
         self.feature_dim = feature_dim
         self.input_dim = input_dim
 
@@ -274,13 +274,8 @@ class DeepKernelGP(nn.Module):
         return self.gp_model(features)
 
     def update_gp_data(self):
-        """Update GP training data with current features."""
         features = self.feature_extractor(self.train_datapoints)
-        
-        # Ensure targets are 1D, then make 2D for BoTorch
-        targets = self.train_targets
-        if targets.ndim > 1:
-            targets = targets.squeeze()  # Make 1D
-        targets = targets.unsqueeze(-1)  # Make [n, 1] for BoTorch
-        
+        targets = self.train_targets.unsqueeze(-1) if self.train_targets.ndim == 1 else self.train_targets
         self.gp_model.set_train_data(features, targets, strict=False)
+        # Force update train_targets on gp_model to match
+        self.gp_model.train_targets = targets.squeeze()
