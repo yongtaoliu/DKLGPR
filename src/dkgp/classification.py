@@ -310,7 +310,7 @@ def train_dkgp_classifier(
     
     # Convert to tensors
     if not isinstance(datapoints, torch.Tensor):
-        datapoints = torch.from_numpy(datapoints).double()
+        datapoints = torch.from_numpy(datapoints).float()
     else:
         datapoints = datapoints.float()
     
@@ -533,9 +533,9 @@ def predict_classifier(
         Predicted labels or probabilities
     """
     if not isinstance(test_data, torch.Tensor):
-        test_data = torch.from_numpy(test_data).double()
+        test_data = torch.from_numpy(test_data).float()
     else:
-        test_data = test_data.double()
+        test_data = test_data.float()
     
     test_data = test_data.to(device)
     model.eval()
