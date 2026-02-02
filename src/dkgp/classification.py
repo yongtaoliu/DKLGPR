@@ -70,7 +70,7 @@ class DeepKernelGPClassifier(nn.Module):
         
         self.feature_extractor = self.feature_extractor.to(
             device=datapoints.device,
-            dtype=datapoints.dtype
+            dtype=torch.float32
         )
         
         # Extract initial features
