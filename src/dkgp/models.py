@@ -10,6 +10,15 @@ from gpytorch.kernels import RBFKernel, ScaleKernel
 from gpytorch.likelihoods import GaussianLikelihood
 
 
+import torch
+import torch.nn as nn
+from botorch.models import SingleTaskGP
+from botorch.models.transforms.input import Normalize
+from botorch.models.transforms.outcome import Standardize
+from gpytorch.kernels import RBFKernel, ScaleKernel
+from gpytorch.likelihoods import GaussianLikelihood
+
+
 class ImageFeatureExtractor(nn.Module):
     """
     Neural network feature extractor for high-dimensional inputs.
@@ -71,8 +80,7 @@ class ConfidenceWeightedMLL(nn.Module):
     """
     Marginal log likelihood with confidence weighting for regression.
     
-    This allows different data points to have different importance weights,
-    useful when some observations are more reliable than others.
+    FIXED: Ensures scalar output for backpropagation.
     
     Parameters
     ----------
@@ -115,10 +123,18 @@ class ConfidenceWeightedMLL(nn.Module):
         Returns
         -------
         torch.Tensor
-            Weighted log likelihood
+            Weighted log likelihood (SCALAR)
         """
         mean = output.mean
         variance = output.variance
+        
+        # FIX: Ensure everything is 1D to avoid shape issues
+        if target.dim() > 1:
+            target = target.squeeze()
+        if mean.dim() > 1:
+            mean = mean.squeeze()
+        if variance.dim() > 1:
+            variance = variance.squeeze()
         
         # Compute residuals
         residuals = target - mean
@@ -132,8 +148,9 @@ class ConfidenceWeightedMLL(nn.Module):
         # Weight by confidence
         weighted_log_probs = self.normalized_weights * log_probs
         
+        # FIX: CRITICAL - Always return scalar by summing
         return weighted_log_probs.sum()
-    
+
 
 class DeepKernelGP(nn.Module):
     """
