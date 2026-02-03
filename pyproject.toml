@@ -12,9 +12,8 @@ authors = [
 ]
 requires-python = ">=3.8"
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 1",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
@@ -72,8 +71,6 @@ all = [
 [project.urls]
 Homepage = "https://github.com/yongtaoliu/DKGP"
 Repository = "https://github.com/yongtaoliu/DKGP"
-Documentation = "https://github.com/yongtaoliu/DKGP/blob/main/README.md"
-"Bug Tracker" = "https://github.com/yongtaoliu/DKGP/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]

@@ -1,9 +1,10 @@
 """
-Acquisition functions for Bayesian optimization with DKGP.
+Acquisition functions for Bayesian optimization with Deep Kernel GP.
 """
 import torch
 import numpy as np
 from scipy.stats import norm
+from scipy.optimize import minimize
 
 
 def expected_improvement(
@@ -179,3 +180,125 @@ def probability_of_improvement(
     pi[std == 0.0] = 0.0
     
     return pi
+
+
+def thompson_sampling(
+    model,
+    candidates,
+    n_samples=1,
+    device='cuda' if torch.cuda.is_available() else 'cpu',
+    seed=None
+):
+    """
+    Thompson Sampling acquisition function.
+    
+    Samples from the posterior and selects points with high sampled values.
+    
+    Parameters
+    ----------
+    model : DeepKernelGP
+        Trained model
+    candidates : np.ndarray or torch.Tensor
+        Candidate points, shape (n_candidates, input_dim)
+    n_samples : int
+        Number of samples to draw
+    device : str
+        Device to use
+    seed : int, optional
+        Random seed for reproducibility
+    
+    Returns
+    -------
+    samples : np.ndarray
+        Samples from posterior, shape (n_samples, n_candidates)
+    """
+    if seed is not None:
+        torch.manual_seed(seed)
+    
+    if not isinstance(candidates, torch.Tensor):
+        candidates = torch.from_numpy(candidates).double()
+    else:
+        candidates = candidates.double()
+    
+    candidates = candidates.to(device)
+    model.eval()
+    
+    with torch.no_grad():
+        posterior = model(candidates)
+        samples = posterior.sample(torch.Size([n_samples]))
+        samples_np = samples.cpu().numpy().squeeze()
+    
+    return samples_np
+
+
+def expected_improvement_with_constraints(
+    model,
+    candidates,
+    best_f,
+    constraint_models=None,
+    constraint_thresholds=None,
+    xi=0.01,
+    device='cuda' if torch.cuda.is_available() else 'cpu',
+    maximize=True
+):
+    """
+    Expected Improvement with constraints.
+    
+    Computes EI weighted by probability of satisfying constraints.
+    
+    Parameters
+    ----------
+    model : DeepKernelGP
+        Trained model for objective
+    candidates : np.ndarray or torch.Tensor
+        Candidate points
+    best_f : float
+        Best observed function value
+    constraint_models : list of DeepKernelGP, optional
+        Models for constraint functions
+    constraint_thresholds : list of float, optional
+        Thresholds for constraints (constraint_i <= threshold_i)
+    xi : float
+        Exploration parameter
+    device : str
+        Device to use
+    maximize : bool
+        If True, maximize objective
+    
+    Returns
+    -------
+    constrained_ei : np.ndarray
+        Constrained EI values
+    """
+    # Compute standard EI
+    ei = expected_improvement(model, candidates, best_f, xi, device, maximize)
+    
+    if constraint_models is None or constraint_thresholds is None:
+        return ei
+    
+    if not isinstance(candidates, torch.Tensor):
+        candidates = torch.from_numpy(candidates).double()
+    else:
+        candidates = candidates.double()
+    
+    candidates = candidates.to(device)
+    
+    # Compute constraint satisfaction probability
+    constraint_prob = np.ones(len(candidates))
+    
+    for c_model, threshold in zip(constraint_models, constraint_thresholds):
+        c_model.eval()
+        with torch.no_grad():
+            posterior = c_model(candidates)
+            mean = posterior.mean.cpu().numpy().squeeze()
+            std = posterior.variance.cpu().numpy().squeeze() ** 0.5
+        
+        # P(constraint <= threshold)
+        Z = (threshold - mean) / (std + 1e-9)
+        prob_feasible = norm.cdf(Z)
+        constraint_prob *= prob_feasible
+    
+    # Weight EI by constraint satisfaction probability
+    constrained_ei = ei * constraint_prob
+    
+    return constrained_ei

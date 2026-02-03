@@ -1,9 +1,8 @@
-# Deep Kernel GP - Restructured with Multiple Feature Extractors
+# DKGP
 
-## New File Structure
 
 ```
-deep_kernel_gp/
+dkgp/
 ├── models.py         # All feature extractors
 ├── gpr.py           # Gaussian Process Regression
 ├── gpc.py           # Gaussian Process Classification
@@ -110,7 +109,7 @@ mean, std = predict(dkl, X_test, return_std=True)
 ### Classification
 
 ```python
-from deep_kernel_gp import fit_dkgp_classifier, predict_classifier
+from dkgp import fit_dkgp_classifier, predict_classifier
 
 # Default extractor (FC + BatchNorm)
 model, losses = fit_dkgp_classifier(X_train, y_train, num_classes=4)

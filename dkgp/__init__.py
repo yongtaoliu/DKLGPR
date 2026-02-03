@@ -1,3 +1,7 @@
+"""
+Deep Kernel GP - Deep Kernel Learning for Gaussian Process Regression and Classification
+"""
+
 # Feature extractors
 from .models import (
     FCFeatureExtractor,
@@ -40,8 +44,13 @@ from .acquisition import (
     expected_improvement_with_constraints,
 )
 
-# Utilities
+# Submodules - for convenience imports
+from . import gpr as dkgpr  # Allow: from dkgp import dkgpr
+from . import gpc as dkgpc  # Allow: from dkgp import dkgpc
+from . import acquisition
 from . import utils
+from . import models
+from . import prediction
 
 __version__ = "0.2.0"
 
@@ -55,18 +64,18 @@ __all__ = [
     "get_feature_extractor",
     "ImageFeatureExtractor",
     # Regression
-    "DKGPR",
+    "DeepKernelGP",
     "ConfidenceWeightedMLL",
-    "train_dkgpr",
-    "fit_dkgpr",
+    "train_dkgp",
+    "fit_dkgp",
     # Classification
-    "DKGPC",
+    "DeepKernelGPClassifier",
     "BinaryGPClassificationModel",
     "MultiClassGPClassificationModel",
     "ConfidenceWeightedELBO",
-    "train_dkgpc",
-    "fit_dkgpc",
-    "predict_dkgpc",
+    "train_dkgp_classifier",
+    "fit_dkgp_classifier",
+    "predict_classifier",
     # Prediction
     "predict",
     # Acquisition
@@ -75,6 +84,11 @@ __all__ = [
     "probability_of_improvement",
     "thompson_sampling",
     "expected_improvement_with_constraints",
-    # Utils
+    # Submodules
+    "dkgpr",
+    "dkgpc",
+    "acquisition",
     "utils",
+    "models",
+    "prediction",
 ]
