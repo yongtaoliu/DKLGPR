@@ -1,27 +1,48 @@
 """
-Core model classes for Deep Kernel GP.
+Core model classes and feature extractors for Deep Kernel GP.
 """
 import torch
 import torch.nn as nn
-from botorch.models import SingleTaskGP
-from botorch.models.transforms.input import Normalize
-from botorch.models.transforms.outcome import Standardize
-from gpytorch.kernels import RBFKernel, ScaleKernel
-from gpytorch.likelihoods import GaussianLikelihood
+import numpy as np
 
 
-import torch
-import torch.nn as nn
-from botorch.models import SingleTaskGP
-from botorch.models.transforms.input import Normalize
-from botorch.models.transforms.outcome import Standardize
-from gpytorch.kernels import RBFKernel, ScaleKernel
-from gpytorch.likelihoods import GaussianLikelihood
+# ============================================================================
+# Feature Extractors
+# ============================================================================
 
-
-class ImageFeatureExtractor(nn.Module):
+class FCFeatureExtractor(nn.Module):
     """
-    Neural network feature extractor for high-dimensional inputs.
+    Simple fully-connected feature extractor.
+    Lightweight, fast, good for prototyping.
+    
+    Parameters
+    ----------
+    input_dim : int
+        Dimensionality of input data
+    feature_dim : int
+        Dimensionality of learned feature space
+    """
+    
+    def __init__(self, input_dim, feature_dim=16):
+        super().__init__()
+        self.network = nn.Sequential(
+            nn.Linear(input_dim, 32),
+            nn.ReLU(),
+            nn.Linear(32, 16),
+            nn.ReLU(),
+            nn.Linear(16, feature_dim)
+        )
+        self.input_dim = input_dim
+        self.feature_dim = feature_dim
+    
+    def forward(self, x):
+        return self.network(x)
+
+
+class FCBNFeatureExtractor(nn.Module):
+    """
+    Fully-connected feature extractor with BatchNorm and Dropout.
+    More robust, prevents overfitting. Recommended for general use.
     
     Parameters
     ----------
@@ -60,222 +81,304 @@ class ImageFeatureExtractor(nn.Module):
         self.feature_dim = feature_dim
 
     def forward(self, x):
-        """
-        Forward pass through feature extractor.
-        
-        Parameters
-        ----------
-        x : torch.Tensor
-            Input tensor of shape (batch_size, input_dim)
-            
-        Returns
-        -------
-        torch.Tensor
-            Features of shape (batch_size, feature_dim)
-        """
         return self.network(x)
 
 
-class ConfidenceWeightedMLL(nn.Module):
+class ResNetFeatureExtractor(nn.Module):
     """
-    Marginal log likelihood with confidence weighting for regression.
-    
-    FIXED: Ensures scalar output for backpropagation.
+    ResNet-style feature extractor with skip connections.
+    Better gradient flow for deeper networks.
     
     Parameters
     ----------
-    likelihood : gpytorch.likelihoods.Likelihood
-        GP likelihood
-    model : gpytorch.models.GP
-        GP model
-    confidence_weights : torch.Tensor
-        Confidence weights for each data point, shape (n,)
-    """
-    
-    def __init__(self, likelihood, model, confidence_weights):
-        super().__init__()
-        self.likelihood = likelihood
-        self.model = model
-        
-        if confidence_weights.dtype != torch.float64:
-            confidence_weights = confidence_weights.double()
-        self.confidence_weights = confidence_weights
-        
-        # Normalize weights to maintain scale
-        if confidence_weights.sum() > 0:
-            self.normalized_weights = (
-                confidence_weights / confidence_weights.sum() * len(confidence_weights)
-            )
-        else:
-            self.normalized_weights = confidence_weights
-    
-    def forward(self, output, target):
-        """
-        Compute weighted marginal log likelihood.
-        
-        Parameters
-        ----------
-        output : gpytorch.distributions.MultivariateNormal
-            GP posterior
-        target : torch.Tensor
-            Target values
-            
-        Returns
-        -------
-        torch.Tensor
-            Weighted log likelihood (SCALAR)
-        """
-        mean = output.mean
-        variance = output.variance
-        
-        # FIX: Ensure everything is 1D to avoid shape issues
-        if target.dim() > 1:
-            target = target.squeeze()
-        if mean.dim() > 1:
-            mean = mean.squeeze()
-        if variance.dim() > 1:
-            variance = variance.squeeze()
-        
-        # Compute residuals
-        residuals = target - mean
-        
-        # Compute log probabilities
-        log_probs = -0.5 * (
-            torch.log(2 * torch.pi * variance) + 
-            (residuals ** 2) / variance
-        )
-        
-        # Weight by confidence
-        weighted_log_probs = self.normalized_weights * log_probs
-        
-        # FIX: CRITICAL - Always return scalar by summing
-        return weighted_log_probs.sum()
-
-
-class DeepKernelGP(nn.Module):
-    """
-    Deep Kernel Learning for Gaussian Process Regression.
-    
-    Combines a neural network feature extractor with a Gaussian Process
-    to handle high-dimensional inputs while maintaining GP benefits.
-    
-    Parameters
-    ----------
-    datapoints : torch.Tensor
-        Training inputs, shape (n, input_dim)
-    targets : torch.Tensor
-        Training targets, shape (n,) or (n, 1)
     input_dim : int
-        Dimensionality of input data
+        Input dimensionality
     feature_dim : int
-        Dimensionality of learned feature space
-    hidden_dims : list of int, optional
-        Hidden layer dimensions for feature extractor
-    confidence_weights : torch.Tensor, optional
-        Confidence weights for each data point
-    noise_constraint : gpytorch.constraints.Constraint, optional
-        Constraint on observation noise
+        Output feature dimensionality
+    hidden_dim : int
+        Hidden layer dimension
+    num_blocks : int
+        Number of residual blocks
     dropout : float
-        Dropout rate for feature extractor
-        
-    Attributes
-    ----------
-    feature_extractor : ImageFeatureExtractor
-        Neural network for dimensionality reduction
-    gp_model : SingleTaskGP
-        Gaussian Process model in feature space
+        Dropout rate
     """
     
-    def __init__(
-        self,
-        datapoints,
-        targets,
-        input_dim,
-        feature_dim=16,
-        hidden_dims=None,
-        confidence_weights=None,
-        noise_constraint=None,
-        dropout=0.2
-    ):
+    class ResBlock(nn.Module):
+        def __init__(self, dim, dropout=0.1):
+            super().__init__()
+            self.fc1 = nn.Linear(dim, dim)
+            self.fc2 = nn.Linear(dim, dim)
+            self.bn1 = nn.BatchNorm1d(dim)
+            self.bn2 = nn.BatchNorm1d(dim)
+            self.dropout = nn.Dropout(dropout)
+            self.relu = nn.ReLU()
+            
+        def forward(self, x):
+            residual = x
+            out = self.relu(self.bn1(self.fc1(x)))
+            out = self.dropout(out)
+            out = self.bn2(self.fc2(out))
+            out += residual  # Skip connection
+            return self.relu(out)
+    
+    def __init__(self, input_dim, feature_dim=16, hidden_dim=128, num_blocks=2, dropout=0.1):
         super().__init__()
         
-        if hidden_dims is None:
-            hidden_dims = [256, 128, 64]
-
-        # Initialize feature extractor
-        self.feature_extractor = ImageFeatureExtractor(
-            input_dim=input_dim,
-            feature_dim=feature_dim,
-            hidden_dims=hidden_dims,
-            dropout=dropout
+        self.input_projection = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim),
+            nn.ReLU(),
+            nn.BatchNorm1d(hidden_dim)
         )
-
-        self.feature_extractor = self.feature_extractor.to(
-            device=datapoints.device,
-            dtype=datapoints.dtype
-        )
-
-        # Extract initial features
-        with torch.no_grad():
-            train_features = self.feature_extractor(datapoints)
-
-        # Set up GP kernel
-        covar_module = ScaleKernel(RBFKernel(ard_num_dims=feature_dim))
         
-        # Initialize likelihood
-        likelihood = GaussianLikelihood()
-        if noise_constraint is not None:
-            likelihood.noise_covar.register_constraint("raw_noise", noise_constraint)
-
-        # Initialize GP model
-        self.gp_model = SingleTaskGP(
-            train_X=train_features,
-            train_Y=targets.unsqueeze(-1) if targets.ndim == 1 else targets,
-            covar_module=covar_module,
-            likelihood=likelihood,
-            input_transform=Normalize(d=feature_dim),
-            outcome_transform=Standardize(m=1)
+        self.res_blocks = nn.Sequential(
+            *[self.ResBlock(hidden_dim, dropout) for _ in range(num_blocks)]
         )
-
-        self.train_datapoints = datapoints
-        self.train_targets = targets.squeeze() if targets.ndim > 1 else targets
-        self.feature_dim = feature_dim
+        
+        self.output_projection = nn.Linear(hidden_dim, feature_dim)
+        
         self.input_dim = input_dim
-
-        # Store confidence weights
-        if confidence_weights is not None:
-            if confidence_weights.dtype != torch.float64:
-                confidence_weights = confidence_weights.double()
-            self.confidence_weights = confidence_weights.to(datapoints.device)
-        else:
-            self.confidence_weights = torch.ones(
-                len(datapoints),
-                dtype=torch.float64, 
-                device=datapoints.device
-            )
-            
-        self.register_buffer('_confidence_weights', self.confidence_weights)
-
+        self.feature_dim = feature_dim
+    
     def forward(self, x):
-        """
-        Forward pass through the model.
-        
-        Parameters
-        ----------
-        x : torch.Tensor
-            Input tensor, shape (batch_size, input_dim)
-            
-        Returns
-        -------
-        gpytorch.distributions.MultivariateNormal
-            GP posterior distribution
-        """
-        features = self.feature_extractor(x)
-        return self.gp_model(features)
+        x = self.input_projection(x)
+        x = self.res_blocks(x)
+        x = self.output_projection(x)
+        return x
 
-    def update_gp_data(self):
-        features = self.feature_extractor(self.train_datapoints)
-        targets = self.train_targets.unsqueeze(-1) if self.train_targets.ndim == 1 else self.train_targets
-        self.gp_model.set_train_data(features, targets, strict=False)
-        # Force update train_targets on gp_model to match
-        self.gp_model.train_targets = targets.squeeze()
+
+class AttentionFeatureExtractor(nn.Module):
+    """
+    Self-attention based feature extractor.
+    Good for learning feature interactions.
+    
+    Parameters
+    ----------
+    input_dim : int
+        Input dimensionality
+    feature_dim : int
+        Output feature dimensionality
+    hidden_dim : int
+        Hidden dimension
+    num_heads : int
+        Number of attention heads
+    """
+    
+    class AttentionBlock(nn.Module):
+        def __init__(self, dim, num_heads=4):
+            super().__init__()
+            self.num_heads = num_heads
+            self.head_dim = dim // num_heads
+            
+            assert dim % num_heads == 0, "dim must be divisible by num_heads"
+            
+            self.query = nn.Linear(dim, dim)
+            self.key = nn.Linear(dim, dim)
+            self.value = nn.Linear(dim, dim)
+            self.out = nn.Linear(dim, dim)
+            
+        def forward(self, x):
+            batch_size = x.shape[0]
+            
+            # Linear projections
+            Q = self.query(x).view(batch_size, self.num_heads, self.head_dim)
+            K = self.key(x).view(batch_size, self.num_heads, self.head_dim)
+            V = self.value(x).view(batch_size, self.num_heads, self.head_dim)
+            
+            # Attention scores
+            scores = torch.matmul(Q, K.transpose(-2, -1)) / np.sqrt(self.head_dim)
+            attention = torch.softmax(scores, dim=-1)
+            
+            # Apply attention
+            out = torch.matmul(attention, V)
+            out = out.view(batch_size, -1)
+            out = self.out(out)
+            
+            return out
+    
+    def __init__(self, input_dim, feature_dim=16, hidden_dim=128, num_heads=4):
+        super().__init__()
+        
+        self.input_projection = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim),
+            nn.ReLU(),
+            nn.LayerNorm(hidden_dim)
+        )
+        
+        self.attention = self.AttentionBlock(hidden_dim, num_heads)
+        
+        self.ffn = nn.Sequential(
+            nn.Linear(hidden_dim, hidden_dim * 2),
+            nn.ReLU(),
+            nn.Dropout(0.1),
+            nn.Linear(hidden_dim * 2, hidden_dim)
+        )
+        
+        self.layer_norm = nn.LayerNorm(hidden_dim)
+        self.output_projection = nn.Linear(hidden_dim, feature_dim)
+        
+        self.input_dim = input_dim
+        self.feature_dim = feature_dim
+    
+    def forward(self, x):
+        x = self.input_projection(x)
+        
+        # Attention block with residual
+        attn_out = self.attention(x)
+        x = self.layer_norm(x + attn_out)
+        
+        # FFN with residual
+        ffn_out = self.ffn(x)
+        x = self.layer_norm(x + ffn_out)
+        
+        x = self.output_projection(x)
+        return x
+
+
+class WideDeepFeatureExtractor(nn.Module):
+    """
+    Wide & Deep architecture: combines linear and deep paths.
+    Good for mixed feature types.
+    
+    Parameters
+    ----------
+    input_dim : int
+        Input dimensionality
+    feature_dim : int
+        Output feature dimensionality
+    deep_dims : list of int
+        Deep path hidden dimensions
+    dropout : float
+        Dropout rate
+    """
+    
+    def __init__(self, input_dim, feature_dim=16, deep_dims=None, dropout=0.2):
+        super().__init__()
+        
+        if deep_dims is None:
+            deep_dims = [128, 64]
+        
+        # Wide path (linear)
+        self.wide_path = nn.Linear(input_dim, feature_dim // 2)
+        
+        # Deep path (nonlinear)
+        deep_layers = []
+        prev_dim = input_dim
+        for hidden_dim in deep_dims:
+            deep_layers.extend([
+                nn.Linear(prev_dim, hidden_dim),
+                nn.ReLU(),
+                nn.BatchNorm1d(hidden_dim),
+                nn.Dropout(dropout)
+            ])
+            prev_dim = hidden_dim
+        deep_layers.append(nn.Linear(prev_dim, feature_dim // 2))
+        self.deep_path = nn.Sequential(*deep_layers)
+        
+        self.input_dim = input_dim
+        self.feature_dim = feature_dim
+    
+    def forward(self, x):
+        wide = self.wide_path(x)
+        deep = self.deep_path(x)
+        return torch.cat([wide, deep], dim=-1)
+
+
+# ============================================================================
+# Feature Extractor Factory
+# ============================================================================
+
+def get_feature_extractor(
+    extractor_type='fcbn',
+    input_dim=None,
+    feature_dim=16,
+    hidden_dims=None,
+    dropout=0.2,
+    **kwargs
+):
+    """
+    Factory function to create feature extractors.
+    
+    Parameters
+    ----------
+    extractor_type : str
+        Type of feature extractor:
+        - 'fc': Simple fully-connected
+        - 'fcbn': FC + BatchNorm + Dropout (recommended)
+        - 'resnet': ResNet with skip connections
+        - 'attention': Self-attention based
+        - 'wide_deep': Wide & Deep architecture
+        - 'custom': User-provided nn.Module
+    input_dim : int
+        Input dimensionality
+    feature_dim : int
+        Output feature dimensionality
+    hidden_dims : list of int, optional
+        Hidden layer dimensions (for 'fcbn' and 'wide_deep')
+    dropout : float
+        Dropout rate
+    **kwargs : additional arguments
+        - custom_extractor: nn.Module for 'custom' type
+        - hidden_dim: for 'resnet' and 'attention'
+        - num_blocks: for 'resnet'
+        - num_heads: for 'attention'
+        - deep_dims: for 'wide_deep'
+    
+    Returns
+    -------
+    feature_extractor : nn.Module
+        Instantiated feature extractor
+        
+    Examples
+    --------
+    >>> # Simple FC
+    >>> extractor = get_feature_extractor('fc', input_dim=100, feature_dim=16)
+    
+    >>> # FC + BatchNorm (recommended)
+    >>> extractor = get_feature_extractor('fcbn', input_dim=100, feature_dim=16,
+    ...                                   hidden_dims=[512, 256, 128])
+    
+    >>> # ResNet
+    >>> extractor = get_feature_extractor('resnet', input_dim=100, feature_dim=16,
+    ...                                   hidden_dim=128, num_blocks=3)
+    
+    >>> # Custom
+    >>> my_net = nn.Sequential(nn.Linear(100, 64), nn.ReLU(), nn.Linear(64, 16))
+    >>> extractor = get_feature_extractor('custom', custom_extractor=my_net)
+    """
+    if extractor_type == 'fc':
+        return FCFeatureExtractor(input_dim, feature_dim)
+    
+    elif extractor_type == 'fcbn':
+        return FCBNFeatureExtractor(input_dim, feature_dim, hidden_dims, dropout)
+    
+    elif extractor_type == 'resnet':
+        hidden_dim = kwargs.get('hidden_dim', 128)
+        num_blocks = kwargs.get('num_blocks', 2)
+        return ResNetFeatureExtractor(input_dim, feature_dim, hidden_dim, num_blocks, dropout)
+    
+    elif extractor_type == 'attention':
+        hidden_dim = kwargs.get('hidden_dim', 128)
+        num_heads = kwargs.get('num_heads', 4)
+        return AttentionFeatureExtractor(input_dim, feature_dim, hidden_dim, num_heads)
+    
+    elif extractor_type == 'wide_deep':
+        deep_dims = kwargs.get('deep_dims', hidden_dims or [128, 64])
+        return WideDeepFeatureExtractor(input_dim, feature_dim, deep_dims, dropout)
+    
+    elif extractor_type == 'custom':
+        custom_extractor = kwargs.get('custom_extractor')
+        if custom_extractor is None:
+            raise ValueError("Must provide 'custom_extractor' for type='custom'")
+        return custom_extractor
+    
+    else:
+        raise ValueError(f"Unknown extractor_type: {extractor_type}. "
+                        f"Choose from: 'fc', 'fcbn', 'resnet', 'attention', 'wide_deep', 'custom'")
+
+
+# ============================================================================
+# Backward Compatibility
+# ============================================================================
+
+# Keep old name for backward compatibility
+ImageFeatureExtractor = FCBNFeatureExtractor

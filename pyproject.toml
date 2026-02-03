@@ -4,15 +4,15 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dkgp"
-version = "0.1.0"
-description = "Deep Kernel Gaussian Process Regression and Classification"
+version = "0.2.0"
+description = "Deep Kernel Gaussian Process Regression and Classification with Multiple Feature Extractors"
 readme = "README.md"
 authors = [
     {name = "Yongtao Liu", email = "youngtaoliu@gmail.com"}
 ]
 requires-python = ">=3.8"
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
@@ -20,7 +20,18 @@ classifiers = [
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
-    "Topic :: Scientific/Engineering :: Artificial Intelligence :: Imaging :: Microscopy :: Autonomous Experiment :: Self-Driving Lab",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering",
+]
+keywords = [
+    "gaussian-processes",
+    "deep-learning",
+    "bayesian-optimization",
+    "machine-learning",
+    "deep-kernel-learning",
+    "classification",
+    "regression",
 ]
 dependencies = [
     "torch>=2.0.0",
@@ -39,37 +50,80 @@ dev = [
     "isort>=5.10.0",
     "flake8>=5.0.0",
     "mypy>=0.990",
+    "jupyter>=1.0.0",
+    "notebook>=6.5.0",
 ]
 docs = [
     "sphinx>=5.0.0",
     "sphinx-rtd-theme>=1.0.0",
     "sphinx-autodoc-typehints>=1.19.0",
+    "myst-parser>=0.18.0",
+]
+examples = [
+    "scikit-learn>=1.0.0",
+    "pandas>=1.3.0",
+    "seaborn>=0.11.0",
+    "tqdm>=4.60.0",
+]
+all = [
+    "dkgp[dev,docs,examples]",
 ]
 
 [project.urls]
 Homepage = "https://github.com/yongtaoliu/DKGP"
 Repository = "https://github.com/yongtaoliu/DKGP"
+Documentation = "https://github.com/yongtaoliu/DKGP/blob/main/README.md"
+"Bug Tracker" = "https://github.com/yongtaoliu/DKGP/issues"
 
 [tool.setuptools.packages.find]
-where = ["src"]
+where = ["."]
+include = ["dkgp*"]
+exclude = ["tests*", "examples*", "docs*"]
+
+[tool.setuptools.package-data]
+dkgp = ["py.typed"]
 
 [tool.black]
 line-length = 100
 target-version = ['py38', 'py39', 'py310', 'py311']
+exclude = '''
+/(
+    \.git
+  | \.venv
+  | build
+  | dist
+)/
+'''
 
 [tool.isort]
 profile = "black"
 line_length = 100
+skip_gitignore = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-addopts = "--cov=dkgp --cov-report=html --cov-report=term"
+addopts = "--cov=dkgp --cov-report=html --cov-report=term-missing"
 
 [tool.mypy]
 python_version = "3.8"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = false
+ignore_missing_imports = true
+
+[tool.coverage.run]
+source = ["dkgp"]
+omit = ["*/tests/*", "*/examples/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
