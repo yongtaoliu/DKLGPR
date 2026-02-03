@@ -200,7 +200,7 @@ class MultiClassGPClassificationModel(ApproximateGP):
 # Deep Kernel GP Classifier
 # ============================================================================
 
-class DeepKernelGPClassifier(nn.Module):
+class DKGPC(nn.Module):
     """
     Deep Kernel Learning for GP Classification.
     
@@ -381,7 +381,7 @@ class DeepKernelGPClassifier(nn.Module):
 # Training Functions
 # ============================================================================
 
-def train_dkgp_classifier(
+def train_dkgpc(
     datapoints,
     targets,
     input_dim,
@@ -620,7 +620,7 @@ def train_dkgp_classifier(
     return model, losses
 
 
-def fit_dkgp_classifier(
+def fit_dkgpc(
     X_train,
     y_train,
     num_classes=None,
@@ -721,7 +721,7 @@ def fit_dkgp_classifier(
     
     input_dim = X_train.shape[-1]
     
-    model, losses = train_dkgp_classifier(
+    model, losses = train_dkgpc(
         datapoints=X_train,
         targets=y_train,
         input_dim=input_dim,
@@ -758,7 +758,7 @@ def fit_dkgp_classifier(
 # Prediction Functions
 # ============================================================================
 
-def predict_classifier(
+def predict_dkgpc(
     model,
     test_data,
     device='cuda' if torch.cuda.is_available() else 'cpu',

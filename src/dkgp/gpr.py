@@ -98,7 +98,7 @@ class ConfidenceWeightedMLL(nn.Module):
 # Deep Kernel GP Regression Model
 # ============================================================================
 
-class DeepKernelGP(nn.Module):
+class DKGPR(nn.Module):
     """
     Deep Kernel Learning for Gaussian Process Regression.
     
@@ -253,7 +253,7 @@ class DeepKernelGP(nn.Module):
 # Training Functions
 # ============================================================================
 
-def train_dkgp(
+def train_dkgpr(
     datapoints,
     targets,
     input_dim,
@@ -373,7 +373,7 @@ def train_dkgp(
                 print("\nUser-selected: ExactMarginalLogLikelihood")
 
     # Create model
-    model = DeepKernelGP(
+    model = DKGPR(
         datapoints=datapoints,
         targets=targets,
         input_dim=input_dim,
@@ -469,7 +469,7 @@ def train_dkgp(
     return model, losses
 
 
-def fit_dkgp(
+def fit_dkgpr(
     X_train, 
     y_train, 
     confidence_weights=None, 
@@ -570,7 +570,7 @@ def fit_dkgp(
 
     input_dim = X_train.shape[-1]
 
-    dkl_model, losses = train_dkgp(
+    dkl_model, losses = train_dkgpr(
         datapoints=X_train,
         targets=y_train,
         input_dim=input_dim,

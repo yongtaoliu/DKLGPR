@@ -55,18 +55,18 @@ __all__ = [
     "get_feature_extractor",
     "ImageFeatureExtractor",
     # Regression
-    "DeepKernelGP",
+    "DKGPR",
     "ConfidenceWeightedMLL",
-    "train_dkgp",
-    "fit_dkgp",
+    "train_dkgpr",
+    "fit_dkgpr",
     # Classification
-    "DeepKernelGPClassifier",
+    "DKGPC",
     "BinaryGPClassificationModel",
     "MultiClassGPClassificationModel",
     "ConfidenceWeightedELBO",
-    "train_dkgp_classifier",
-    "fit_dkgp_classifier",
-    "predict_classifier",
+    "train_dkgpc",
+    "fit_dkgpc",
+    "predict_dkgpc",
     # Prediction
     "predict",
     # Acquisition

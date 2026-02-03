@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "dkgp"
 version = "0.2.0"
-description = "Deep Kernel Gaussian Process Regression and Classification with Multiple Feature Extractors"
+description = "Deep Kernel Gaussian Process Regression and Classification"
 readme = "README.md"
 authors = [
     {name = "Yongtao Liu", email = "youngtaoliu@gmail.com"}
