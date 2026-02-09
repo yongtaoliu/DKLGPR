@@ -35,11 +35,6 @@ dkgp/
    - Good for relational data
    - More parameters
 
-5. **`WideDeepFeatureExtractor`** - Wide & Deep architecture
-   - Combines linear + nonlinear paths
-   - Good for mixed feature types
-   - Flexible
-
 ### Factory Function
 
 Use `get_feature_extractor()` to create extractors:
