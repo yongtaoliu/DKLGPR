@@ -175,7 +175,7 @@ class AttentionFeatureExtractor(nn.Module):
             self.out = nn.Linear(dim, dim)
             self.last_attention_weights = None # Store last attention weights
             
-        def forward(self, x):
+        def forward(self, x, return_attention=False):
             batch_size = x.shape[0]
             
             # Linear projections
@@ -189,12 +189,14 @@ class AttentionFeatureExtractor(nn.Module):
 
             # Store for later retrieval
             self.last_attention_weights = attention.detach()
-            
+
             # Apply attention
             out = torch.matmul(attention, V)
             out = out.view(batch_size, -1)
             out = self.out(out)
-            
+            # Optional return attention
+            if return_attention:
+                return out, attention
             return out
         
         def get_attention_weights(self):
