@@ -8,8 +8,10 @@ from .models import (
     FCBNFeatureExtractor,
     ResNetFeatureExtractor,
     AttentionFeatureExtractor,
+    DirectAttentionExtractor,
+    AttentionWeightedExtractor,
     get_feature_extractor,
-    ImageFeatureExtractor,  # Backward compatibility
+    ImageFeatureExtractor,  
 )
 
 # Regression
@@ -81,6 +83,8 @@ __all__ = [
     "FCBNFeatureExtractor",
     "ResNetFeatureExtractor",
     "AttentionFeatureExtractor",
+    "DirectAttentionExtractor",
+    "AttentionWeightedExtractor",
     "get_feature_extractor",
     "ImageFeatureExtractor",
     # Regression
