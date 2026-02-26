@@ -96,6 +96,74 @@ class ConfidenceWeightedMLL(nn.Module):
         return weighted_log_probs.sum()
 
 
+class SampleWeightedMLL(nn.Module):
+    """
+    Marginal log likelihood with learnable sample weights.
+    
+    Similar to ConfidenceWeightedMLL but weights are dynamically updated
+    during training for sample-level attention.
+    
+    Parameters
+    ----------
+    likelihood : gpytorch.likelihoods.Likelihood
+        GP likelihood
+    model : gpytorch.models.GP
+        GP model
+    sample_weight_module : SampleWeightModule
+        Module containing learnable sample weights
+    """
+    
+    def __init__(self, likelihood, model, sample_weight_module):
+        super().__init__()
+        self.likelihood = likelihood
+        self.model = model
+        self.sample_weight_module = sample_weight_module
+    
+    def forward(self, output, target):
+        """
+        Compute weighted marginal log likelihood with dynamic sample weights.
+        
+        Parameters
+        ----------
+        output : gpytorch.distributions.MultivariateNormal
+            GP posterior
+        target : torch.Tensor
+            Target values
+            
+        Returns
+        -------
+        torch.Tensor
+            Weighted log likelihood (SCALAR)
+        """
+        # Get current sample weights (dynamically updated during training)
+        sample_weights = self.sample_weight_module.get_weights()
+        
+        mean = output.mean
+        variance = output.variance
+        
+        # Ensure everything is 1D to avoid shape issues
+        if target.dim() > 1:
+            target = target.squeeze()
+        if mean.dim() > 1:
+            mean = mean.squeeze()
+        if variance.dim() > 1:
+            variance = variance.squeeze()
+        
+        # Compute residuals
+        residuals = target - mean
+        
+        # Compute log probabilities per sample
+        log_probs = -0.5 * (
+            torch.log(2 * torch.pi * variance) + 
+            (residuals ** 2) / variance
+        )
+        
+        # Weight by learnable sample weights
+        weighted_log_probs = sample_weights * log_probs
+        
+        # Return scalar
+        return weighted_log_probs.sum()
+    
 # ============================================================================
 # Deep Kernel GP Regression Model
 # ============================================================================
@@ -280,7 +348,9 @@ def train_dkgp(
     device='cuda' if torch.cuda.is_available() else 'cpu',
     verbose=True,
     patience=None,
-    min_delta=1e-4
+    min_delta=1e-4,
+    sample_weights_param=None,
+    sample_weight_lr=None
 ):
     """
     Train Deep Kernel GP for regression.
@@ -298,7 +368,8 @@ def train_dkgp(
     hidden_dims : list of int, optional
         Hidden layer dimensions. Default: [256, 128, 64]
     extractor_type : str
-        Feature extractor type ('fc', 'fcbn', 'resnet', 'attention', 'wide_deep', 'custom')
+        Feature extractor type ('fc', 'fcbn', 'resnet', 'attention', 
+        'attention_weighted', 'wide_deep', 'custom')
     extractor_kwargs : dict, optional
         Additional arguments for feature extractor
     confidence_weights : np.ndarray or torch.Tensor, optional
@@ -321,6 +392,10 @@ def train_dkgp(
         Early stopping patience (epochs without improvement)
     min_delta : float
         Minimum improvement to reset patience counter
+    sample_weights_param : nn.Parameter, optional
+        Learnable sample weights (for sample-level attention)
+    sample_weight_lr : float, optional
+        Learning rate for sample weights
     
     Returns
     -------
@@ -394,15 +469,45 @@ def train_dkgp(
         extractor_kwargs=extractor_kwargs,
         confidence_weights=confidence_weights
     ).to(device)
+    
+    # Handle sample-level attention
+    if sample_weights_param is not None:
+        from .sample_weighting import SampleWeightModule
+        
+        # Create sample weight module
+        model.sample_weight_module = SampleWeightModule(len(datapoints))
+        model.sample_weight_module.log_weights = sample_weights_param
+        model.sample_weight_module = model.sample_weight_module.to(device)
+        
+        # Register parameter with model  
+        model.register_parameter('sample_weights_log', sample_weights_param)
 
     # Optimizer
-    optimizer = torch.optim.Adam([
-        {'params': model.feature_extractor.parameters(), 'lr': lr_features},
-        {'params': model.gp_model.parameters(), 'lr': lr_gp}
-    ])
+    if sample_weights_param is not None:
+        # Include sample weights in optimization
+        optimizer = torch.optim.Adam([
+            {'params': model.feature_extractor.parameters(), 'lr': lr_features},
+            {'params': model.gp_model.parameters(), 'lr': lr_gp},
+            {'params': [sample_weights_param], 'lr': sample_weight_lr}
+        ])
+    else:
+        # Standard optimizer
+        optimizer = torch.optim.Adam([
+            {'params': model.feature_extractor.parameters(), 'lr': lr_features},
+            {'params': model.gp_model.parameters(), 'lr': lr_gp}
+        ])
 
     # Select MLL
-    if use_custom_mll:
+    if sample_weights_param is not None:
+        # Use sample-weighted MLL (learnable weights)
+        mll = SampleWeightedMLL(
+            model.gp_model.likelihood,
+            model.gp_model,
+            model.sample_weight_module
+        )
+        mll_name = "SampleWeightedMLL"
+    elif use_custom_mll:
+        # Use confidence-weighted MLL (fixed weights)
         mll = ConfidenceWeightedMLL(
             model.gp_model.likelihood,
             model.gp_model,
@@ -410,6 +515,7 @@ def train_dkgp(
         )
         mll_name = "ConfidenceWeightedMLL"
     else:
+        # Standard MLL
         mll = ExactMarginalLogLikelihood(
             model.gp_model.likelihood,
             model.gp_model
@@ -472,9 +578,19 @@ def train_dkgp(
 
     model.eval()
     
+    # Store final sample weights if learned
+    if sample_weights_param is not None:
+        model.sample_weights = model.sample_weight_module.get_weights().detach()
+    
     if verbose:
         print("=" * 60)
         print(f"Training complete! Final loss: {losses[-1]:.4f}")
+        if sample_weights_param is not None:
+            sw = model.sample_weights.cpu().numpy()
+            print(f"Sample weights: min={sw.min():.3f}, max={sw.max():.3f}, "
+                  f"mean={sw.mean():.3f}")
+            n_low = (sw < 0.5).sum()
+            print(f"Samples with low weight (<0.5): {n_low}/{len(sw)}")
         print("=" * 60)
     
     return model, losses
@@ -485,6 +601,8 @@ def fit_dkgp(
     y_train, 
     confidence_weights=None, 
     use_custom_mll=None, 
+    learn_sample_weights=False, 
+    sample_weight_lr=0.01, 
     feature_dim=16, 
     hidden_dims=None,
     extractor_type='fcbn',
@@ -494,7 +612,6 @@ def fit_dkgp(
     lr_gp=1e-2,
     device='cuda' if torch.cuda.is_available() else 'cpu',
     verbose=True,
-    plot_loss=True,
     patience=None,
     min_delta=1e-4
 ):
@@ -514,12 +631,20 @@ def fit_dkgp(
         Confidence weights for each data point, shape (N,)
     use_custom_mll : bool, optional
         Explicitly choose MLL type (None = auto-select)
+    learn_sample_weights : bool
+        If True, learn per-sample weights to downweight noisy/outlier samples.
+        This is sample-level attention: model learns which training samples
+        are reliable vs noisy. Default: False
+    sample_weight_lr : float
+        Learning rate for sample weights (only used if learn_sample_weights=True).
+        Default: 0.01
     feature_dim : int
         Dimensionality of learned feature space
     hidden_dims : list of int, optional
         Hidden layer dimensions. Default: [256, 128, 64]
     extractor_type : str
-        Feature extractor type: 'fc', 'fcbn', 'resnet', 'attention', 'wide_deep', 'custom'
+        Feature extractor type: 'fc', 'fcbn', 'resnet', 'attention', 
+        'attention_weighted', 'wide_deep', 'custom'
     extractor_kwargs : dict, optional
         Additional arguments for feature extractor
     num_epochs : int
@@ -532,8 +657,6 @@ def fit_dkgp(
         Device to use
     verbose : bool
         Print training information
-    plot_loss : bool
-        Plot training loss curve
     patience : int, optional
         Early stopping patience
     min_delta : float
@@ -549,14 +672,32 @@ def fit_dkgp(
         Complete deep kernel model with feature extractor
     losses : list
         Training losses
+    sample_weights : np.ndarray, optional
+        Learned sample weights (only if learn_sample_weights=True)
+        Shape: (N,), values in [0, 1], mean ≈ 1.0
+        Low weights indicate noisy/outlier samples
         
     Examples
     --------
     >>> # Default extractor (FC + BatchNorm)
     >>> mll, gp, dkl, losses = fit_dkgp(X, y, feature_dim=16)
     
-    >>> # Simple FC extractor
-    >>> mll, gp, dkl, losses = fit_dkgp(X, y, extractor_type='fc')
+    >>> # With sample-level attention (detect noisy samples)
+    >>> mll, gp, dkl, losses, sample_weights = fit_dkgp(
+    ...     X, y, 
+    ...     learn_sample_weights=True,  # Enable sample weighting
+    ...     sample_weight_lr=0.01
+    ... )
+    >>> # Find noisy samples
+    >>> noisy = np.where(sample_weights < 0.5)[0]
+    >>> print(f"Detected {len(noisy)} noisy samples")
+    
+    >>> # Combine feature-level and sample-level attention
+    >>> mll, gp, dkl, losses, sample_weights = fit_dkgp(
+    ...     X, y,
+    ...     extractor_type='attention_weighted',  # Feature attention
+    ...     learn_sample_weights=True  # Sample attention
+    ... )
     
     >>> # ResNet extractor
     >>> mll, gp, dkl, losses = fit_dkgp(X, y, extractor_type='resnet',
@@ -572,12 +713,38 @@ def fit_dkgp(
     
     if extractor_kwargs is None:
         extractor_kwargs = {}
+    
+    # Handle sample-level attention
+    if learn_sample_weights:
+        import numpy as np
         
-    if verbose:
-        print("=" * 60)
-        print("Training Deep Kernel GP Regression Model")
-        print(f"Feature Extractor: {extractor_type}")
-        print("=" * 60)
+        # Convert to numpy for easier handling
+        if isinstance(X_train, torch.Tensor):
+            X_np = X_train.cpu().numpy()
+            y_np = y_train.cpu().numpy()
+        else:
+            X_np = X_train
+            y_np = y_train
+        
+        n_samples = len(X_np)
+        
+        # Initialize sample weights as learnable parameters
+        sample_weights_param = nn.Parameter(torch.zeros(n_samples).double())
+        
+        if verbose:
+            print("=" * 60)
+            print("Training Deep Kernel GP with Sample-Level Attention")
+            print(f"Feature Extractor: {extractor_type}")
+            print(f"Sample Weighting: ENABLED ({n_samples} learnable weights)")
+            print("=" * 60)
+    else:
+        sample_weights_param = None
+        
+        if verbose:
+            print("=" * 60)
+            print("Training Deep Kernel GP Regression Model")
+            print(f"Feature Extractor: {extractor_type}")
+            print("=" * 60)
 
     input_dim = X_train.shape[-1]
 
@@ -595,8 +762,11 @@ def fit_dkgp(
         lr_features=lr_features,
         lr_gp=lr_gp,
         device=device,
+        verbose=verbose,
         patience=patience,
-        min_delta=min_delta
+        min_delta=min_delta,
+        sample_weights_param=sample_weights_param,  # Pass sample weights
+        sample_weight_lr=sample_weight_lr if learn_sample_weights else None
     )
 
     gp_model = dkl_model.gp_model
@@ -613,8 +783,13 @@ def fit_dkgp(
             gp_model.likelihood,
             gp_model
         )
-
-    return mll, gp_model, dkl_model, losses
+    
+    # Return sample weights if they were learned
+    if learn_sample_weights and hasattr(dkl_model, 'sample_weights'):
+        sample_weights = dkl_model.sample_weights.detach().cpu().numpy()
+        return mll, gp_model, dkl_model, losses, sample_weights
+    else:
+        return mll, gp_model, dkl_model, losses
 
 # ============================================================================
 # Acquisition Functions

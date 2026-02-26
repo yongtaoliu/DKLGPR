@@ -18,6 +18,7 @@ from .models import (
 from .gpr import (
     DeepKernelGP,
     ConfidenceWeightedMLL,
+    SampleWeightedMLL,
     train_dkgp,
     fit_dkgp,
     predict_dkgpr,
@@ -26,6 +27,12 @@ from .gpr import (
     probability_of_improvement,
     thompson_sampling,
     expected_improvement_with_constraints
+)
+
+# Sample weighting utilities
+from .sample_weighting import (
+    SampleWeightModule,
+    analyze_sample_weights,
 )
 
 # Classification
@@ -90,6 +97,7 @@ __all__ = [
     # Regression
     "DeepKernelGP",
     "ConfidenceWeightedMLL",
+    "SampleWeightedMLL",
     "train_dkgp",
     "fit_dkgp",
     "predict_dkgpr",
@@ -98,6 +106,9 @@ __all__ = [
     "probability_of_improvement",
     "thompson_sampling",
     "expected_improvement_with_constraints",
+    # Sample weighting
+    "SampleWeightModule",
+    "analyze_sample_weights",
     # Classification
     "DeepKernelGPClassifier",
     "BinaryGPClassificationModel",
