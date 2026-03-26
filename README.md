@@ -12,11 +12,11 @@ The neural network learns a compressed feature representation; the GP is fit on 
 
 **Version:** 0.2.0
 **Install:** `pip install engage-gp`
-**Import:** `import dkgp`
+**Import:** `import engagegp`
 
 ```
-engage-gp/   (import as: import dkgp)
-dkgp/
+engage-gp/   (import as: import engagegp)
+engagegp/
 ├── models.py           # Feature extractors
 ├── gpr.py              # GP Regression + Bayesian optimization
 ├── gpc.py              # GP Classification
@@ -69,7 +69,7 @@ Does not compute pairwise attention between features. Instead, it learns a singl
 ### Factory Function
 
 ```python
-from dkgp import get_feature_extractor
+from engagegp import get_feature_extractor
 
 # Simple FC
 extractor = get_feature_extractor('fc', input_dim=100, feature_dim=16)
@@ -105,7 +105,7 @@ extractor = get_feature_extractor('custom', custom_extractor=my_net)
 ## Regression
 
 ```python
-from dkgp import fit_dkgp, predict_dkgpr
+from engagegp import fit_dkgp, predict_dkgpr
 
 # Fit (default: FC + BatchNorm extractor)
 mll, gp, dkl, losses = fit_dkgp(X_train, y_train, feature_dim=16)
@@ -125,7 +125,7 @@ mll, gp, dkl, losses = fit_dkgp(X_train, y_train, confidence_weights=weights)
 
 ```python
 import numpy as np
-from dkgp import fit_dkgp, predict_dkgpr
+from engagegp import fit_dkgp, predict_dkgpr
 
 np.random.seed(42)
 X_train = np.random.randn(200, 50)
@@ -150,7 +150,7 @@ mean, std = predict_dkgpr(dkl, X_test, return_std=True)
 ## Classification
 
 ```python
-from dkgp import fit_dkgp_classifier, predict_classifier
+from engagegp import fit_dkgp_classifier, predict_classifier
 
 # Fit (num_classes auto-detected if not specified)
 model, losses = fit_dkgp_classifier(X_train, y_train, num_classes=4)
@@ -179,7 +179,7 @@ model, losses = fit_dkgp_classifier(X_train, y_train, confidence_weights=weights
 After fitting a regression model, use acquisition functions to guide optimization:
 
 ```python
-from dkgp import (
+from engagegp import (
     expected_improvement,
     upper_confidence_bound,
     probability_of_improvement,
@@ -210,7 +210,7 @@ ei_c = expected_improvement_with_constraints(dkl, X_candidates, constraint_model
 Learn from pairwise comparisons (A preferred over B) rather than absolute values:
 
 ```python
-from dkgp import (
+from engagegp import (
     fit_dkgppw,
     predict_utility,
     dkgppw_eubo,   # Expected Utility of Best Option acquisition
@@ -237,7 +237,7 @@ next_pair = acquire_preference(model, X_candidates, method='eubo')
 Learnable per-sample weights for robust training against noisy labels:
 
 ```python
-from dkgp import SampleWeightModule, analyze_sample_weights
+from engagegp import SampleWeightModule, analyze_sample_weights
 
 # Create weight module
 weight_module = SampleWeightModule(n_samples=len(X_train))
@@ -264,7 +264,7 @@ Use `SampleWeightedMLL` in `gpr.py` to incorporate learned sample weights into t
 Inspect what the model has learned to focus on:
 
 ```python
-from dkgp import (
+from engagegp import (
     get_attention_scores,
     get_attention_for_sample,
     analyze_attention_locality,
@@ -305,7 +305,7 @@ top_features = np.argsort(weights)[-10:][::-1]
 ## Model Persistence
 
 ```python
-from dkgp import save_model, load_model
+from engagegp import save_model, load_model
 
 save_model(dkl, 'my_model.pt')
 dkl = load_model('my_model.pt')
@@ -318,7 +318,7 @@ dkl = load_model('my_model.pt')
 ```python
 import torch
 import torch.nn as nn
-from dkgp import get_feature_extractor, fit_dkgp
+from engagegp import get_feature_extractor, fit_dkgp
 
 class HybridExtractor(nn.Module):
     def __init__(self, input_dim, feature_dim):

@@ -78,11 +78,11 @@ Repository = "https://github.com/yongtaoliu/ENGAGE"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["dkgp*"]
+include = ["engagegp*"]
 exclude = ["tests*", "examples*", "docs*"]
 
 [tool.setuptools.package-data]
-dkgp = ["py.typed"]
+engagegp = ["py.typed"]
 
 [tool.black]
 line-length = 100
@@ -106,7 +106,7 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-addopts = "--cov=dkgp --cov-report=html --cov-report=term-missing"
+addopts = "--cov=engagegp --cov-report=html --cov-report=term-missing"
 
 [tool.mypy]
 python_version = "3.8"
@@ -116,7 +116,7 @@ disallow_untyped_defs = false
 ignore_missing_imports = true
 
 [tool.coverage.run]
-source = ["dkgp"]
+source = ["engagegp"]
 omit = ["*/tests/*", "*/examples/*"]
 
 [tool.coverage.report]
