@@ -221,10 +221,14 @@ class DeepKernelPairwiseGP(nn.Module):
         
         if hidden_dims is None:
             hidden_dims = [256, 128, 64]
-        
+
         if extractor_kwargs is None:
             extractor_kwargs = {}
-        
+
+        # extractor_type=None → standard GP: identity extractor, GP lives in input space
+        if extractor_type is None:
+            feature_dim = input_dim
+
         self.input_dim = input_dim
         self.feature_dim = feature_dim
         self.extractor_type = extractor_type
@@ -549,10 +553,13 @@ def train_dkgppw(
         allow_ties=allow_ties
     ).to(device)
 
-    optimizer = torch.optim.Adam([
-        {'params': model.feature_extractor.parameters(), 'lr': lr_features},
-        {'params': model.gp_model.parameters(), 'lr': lr_gp}
-    ])
+    # Optimizer — skip feature extractor group when it has no parameters (extractor_type=None)
+    has_extractor_params = len(list(model.feature_extractor.parameters())) > 0
+    param_groups = []
+    if has_extractor_params:
+        param_groups.append({'params': model.feature_extractor.parameters(), 'lr': lr_features})
+    param_groups.append({'params': model.gp_model.parameters(), 'lr': lr_gp})
+    optimizer = torch.optim.Adam(param_groups)
 
     # ===== SELECT MLL =====
     if use_custom_mll:
@@ -597,11 +604,14 @@ def train_dkgppw(
     patience_counter = 0
 
     if verbose:
-        print(f"\nTraining Deep Kernel PairwiseGP")
+        if extractor_type is None:
+            print(f"\nTraining Standard PairwiseGP (no deep kernel)")
+        else:
+            print(f"\nTraining Deep Kernel PairwiseGP")
         print("="*60)
         print(f"  Device: {device}")
-        print(f"  Extractor type: {extractor_type}")
-        print(f"  Input dim: {input_dim} → Feature dim: {feature_dim}")
+        print(f"  Extractor type: {extractor_type if extractor_type is not None else 'None (standard GP)'}")
+        print(f"  Input dim: {input_dim} → Feature dim: {model.feature_dim}")
         print(f"  Total comparisons: {len(comparisons)}")
         if allow_ties:
             print(f"    Strict: {n_strict}, Ties: {n_ties}")
@@ -753,8 +763,11 @@ def fit_dkgppw(
     
     if verbose:
         print("="*60)
-        print("Training Deep Kernel PairwiseGP Model")
-        print(f"Feature Extractor: {extractor_type}")
+        if extractor_type is None:
+            print("Training Standard PairwiseGP (no deep kernel)")
+        else:
+            print("Training Deep Kernel PairwiseGP Model")
+            print(f"Feature Extractor: {extractor_type}")
         print("="*60)
 
     input_dim = X_train.shape[-1]
@@ -828,7 +841,7 @@ def fit_dkgppw(
         plt.plot(losses, linewidth=2, color='#2E86AB')
         plt.xlabel('Epoch', fontsize=12)
         plt.ylabel('Negative MLL', fontsize=12)
-        plt.title(f'Training Loss ({extractor_type} extractor)', fontsize=14, fontweight='bold')
+        plt.title(f'Training Loss ({extractor_type if extractor_type is not None else "standard GP"})', fontsize=14, fontweight='bold')
         plt.grid(True, alpha=0.3, linestyle='--')
         plt.tight_layout()
         plt.show()

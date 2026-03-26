@@ -223,9 +223,13 @@ class DeepKernelGP(nn.Module):
         
         if hidden_dims is None:
             hidden_dims = [256, 128, 64]
-        
+
         if extractor_kwargs is None:
             extractor_kwargs = {}
+
+        # extractor_type=None → standard GP: identity extractor, GP lives in input space
+        if extractor_type is None:
+            feature_dim = input_dim
 
         # Create feature extractor
         self.feature_extractor = get_feature_extractor(
@@ -482,20 +486,15 @@ def train_dkgp(
         # Register parameter with model  
         model.register_parameter('sample_weights_log', sample_weights_param)
 
-    # Optimizer
+    # Optimizer — skip feature extractor group when it has no parameters (extractor_type=None)
+    has_extractor_params = len(list(model.feature_extractor.parameters())) > 0
+    param_groups = []
+    if has_extractor_params:
+        param_groups.append({'params': model.feature_extractor.parameters(), 'lr': lr_features})
+    param_groups.append({'params': model.gp_model.parameters(), 'lr': lr_gp})
     if sample_weights_param is not None:
-        # Include sample weights in optimization
-        optimizer = torch.optim.Adam([
-            {'params': model.feature_extractor.parameters(), 'lr': lr_features},
-            {'params': model.gp_model.parameters(), 'lr': lr_gp},
-            {'params': [sample_weights_param], 'lr': sample_weight_lr}
-        ])
-    else:
-        # Standard optimizer
-        optimizer = torch.optim.Adam([
-            {'params': model.feature_extractor.parameters(), 'lr': lr_features},
-            {'params': model.gp_model.parameters(), 'lr': lr_gp}
-        ])
+        param_groups.append({'params': [sample_weights_param], 'lr': sample_weight_lr})
+    optimizer = torch.optim.Adam(param_groups)
 
     # Select MLL
     if sample_weights_param is not None:
@@ -528,13 +527,17 @@ def train_dkgp(
     patience_counter = 0
 
     if verbose:
-        print(f"\nTraining Deep Kernel GP")
+        if extractor_type is None:
+            print(f"\nTraining Standard GP (no deep kernel)")
+        else:
+            print(f"\nTraining Deep Kernel GP")
         print("=" * 60)
         print(f"  Device: {device}")
-        print(f"  Extractor type: {extractor_type}")
-        print(f"  Input dim: {input_dim} → Feature dim: {feature_dim}")
+        print(f"  Extractor type: {extractor_type if extractor_type is not None else 'None (standard GP)'}")
+        print(f"  Input dim: {input_dim} → Feature dim: {model.feature_dim}")
         print(f"  Data points: {len(datapoints)}")
-        print(f"  Hidden layers: {hidden_dims}")
+        if extractor_type is not None:
+            print(f"  Hidden layers: {hidden_dims}")
         print(f"  MLL: {mll_name}")
         if patience:
             print(f"  Early stopping: patience={patience}, min_delta={min_delta}")
@@ -642,9 +645,11 @@ def fit_dkgp(
         Dimensionality of learned feature space
     hidden_dims : list of int, optional
         Hidden layer dimensions. Default: [256, 128, 64]
-    extractor_type : str
-        Feature extractor type: 'fc', 'fcbn', 'resnet', 'attention', 
-        'attention_weighted', 'wide_deep', 'custom'
+    extractor_type : str or None
+        Feature extractor type: 'fc', 'fcbn', 'resnet', 'attention',
+        'attention_weighted', 'direct_attention', 'custom', or None.
+        Pass ``None`` for a standard GP with no deep kernel — the GP kernel
+        operates directly on the raw input features.
     extractor_kwargs : dict, optional
         Additional arguments for feature extractor
     num_epochs : int
@@ -739,11 +744,14 @@ def fit_dkgp(
             print("=" * 60)
     else:
         sample_weights_param = None
-        
+
         if verbose:
             print("=" * 60)
-            print("Training Deep Kernel GP Regression Model")
-            print(f"Feature Extractor: {extractor_type}")
+            if extractor_type is None:
+                print("Training Standard GP (no deep kernel)")
+            else:
+                print("Training Deep Kernel GP Regression Model")
+                print(f"Feature Extractor: {extractor_type}")
             print("=" * 60)
 
     input_dim = X_train.shape[-1]

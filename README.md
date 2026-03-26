@@ -1,10 +1,21 @@
-# DKGP
+# ENGAGE
 
-Deep Kernel Gaussian Process — combines deep neural networks with Gaussian Processes for regression, classification, and preference learning. The neural network learns a compressed feature representation; the GP is fit on top for uncertainty-aware predictions.
+**E**xplainable **N**eural **G**P with **A**ctive **G**uided **E**xploration
+
+ENGAGE combines deep neural networks with Gaussian Processes for regression, classification, and preference learning — designed around three core principles:
+
+- **Human-guided** — pairwise preference learning lets users steer the model through comparisons rather than numeric labels; Bayesian optimization acquisition functions support active experimental design
+- **Explainable** — attention-based extractors expose what the model focuses on; per-feature importance maps and head×head attention matrices are first-class outputs, not afterthoughts
+- **Active learning** — uncertainty estimates from the GP drive principled query selection; sample weighting identifies unreliable measurements automatically
+
+The neural network learns a compressed feature representation; the GP is fit on top for calibrated uncertainty-aware predictions.
 
 **Version:** 0.2.0
+**Install:** `pip install engage-gp`
+**Import:** `import dkgp`
 
 ```
+engage-gp/   (import as: import dkgp)
 dkgp/
 ├── models.py           # Feature extractors
 ├── gpr.py              # GP Regression + Bayesian optimization
@@ -30,6 +41,30 @@ dkgp/
 | `direct_attention` | `DirectAttentionExtractor` | Attention on raw inputs (e.g., spectroscopy wavelengths) |
 | `attention_weighted` | `AttentionWeightedExtractor` | Interpretable feature importance weights |
 | `custom` | any `nn.Module` | User-provided architecture |
+
+### Attention Extractors: Key Differences
+
+All three attention-based extractors use the self-attention mechanism differently. Choosing the right one depends on what you want to learn and interpret.
+
+| | `attention` | `direct_attention` | `attention_weighted` |
+|---|---|---|---|
+| **What attends to what** | Heads attend to each other (in hidden space) | Raw input features attend to each other | Each input feature gets a scalar importance score |
+| **Attention map shape** | `(batch, num_heads, num_heads)` | `(batch, num_heads, input_dim, input_dim)` | `(batch, input_dim)` |
+| **Projection** | Input → hidden → multi-head | Input directly split into heads | Input → attention scores (no projection) |
+| **Interpretation** | Which learned perspectives are correlated | Which input features interact with which | Which input features matter most |
+| **Computational cost** | Low (heads × heads) | High (input_dim²) | Low |
+| **Best for** | General relational data | Spectroscopy, signals, spatial data | Feature selection, interpretability |
+
+**`attention` (`AttentionFeatureExtractor`)**
+Projects the input into a hidden space, then applies multi-head self-attention. The attention is computed between the `num_heads` learned projections of the input — not between input features directly. The resulting map `(batch, num_heads, num_heads)` tells you how the model's internal "perspectives" relate to each other. Good general-purpose choice when you want attention-based representation learning without the cost of input×input maps.
+
+**`direct_attention` (`DirectAttentionExtractor`)**
+Applies attention directly to the raw input features — no projection into hidden space first. Each head computes an `input_dim × input_dim` attention map, capturing which input positions (e.g., wavelengths, pixels, time steps) attend to which others. The map shape `(batch, num_heads, input_dim, input_dim)` is interpretable as a feature-to-feature relationship matrix. Use this when the spatial or sequential structure of the input itself is meaningful.
+
+**`attention_weighted` (`AttentionWeightedExtractor`)**
+Does not compute pairwise attention between features. Instead, it learns a single importance weight per input feature — a soft feature selection mask. The weights `(batch, input_dim)` sum to 1.0 and are applied element-wise before passing through a base extractor (default: `fcbn`). This is the most interpretable option: you can directly see which input dimensions the model relies on. Use this when you want to know *which features matter*, not how they interact.
+
+---
 
 ### Factory Function
 

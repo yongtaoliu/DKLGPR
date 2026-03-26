@@ -10,8 +10,9 @@ from .models import (
     AttentionFeatureExtractor,
     DirectAttentionExtractor,
     AttentionWeightedExtractor,
+    IdentityExtractor,
     get_feature_extractor,
-    ImageFeatureExtractor,  
+    ImageFeatureExtractor,
 )
 
 # Regression
@@ -92,6 +93,7 @@ __all__ = [
     "AttentionFeatureExtractor",
     "DirectAttentionExtractor",
     "AttentionWeightedExtractor",
+    "IdentityExtractor",
     "get_feature_extractor",
     "ImageFeatureExtractor",
     # Regression

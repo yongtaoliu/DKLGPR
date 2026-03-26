@@ -698,6 +698,29 @@ class AttentionWeightedExtractor(nn.Module):
 # Feature Extractor Factory
 # ============================================================================
 
+class IdentityExtractor(nn.Module):
+    """
+    No-op feature extractor for standard (non-deep-kernel) GP.
+
+    Passes the raw input directly to the GP without any transformation.
+    Use by setting ``extractor_type=None`` in :func:`fit_dkgp`.
+    The GP kernel then operates on the original input space.
+
+    Parameters
+    ----------
+    input_dim : int
+        Dimensionality of input data (also the GP feature dimension).
+    """
+
+    def __init__(self, input_dim):
+        super().__init__()
+        self.input_dim = input_dim
+        self.feature_dim = input_dim  # GP operates in input space
+
+    def forward(self, x):
+        return x
+
+
 def get_feature_extractor(
     extractor_type='fcbn',
     input_dim=None,
@@ -790,11 +813,14 @@ def get_feature_extractor(
         if custom_extractor is None:
             raise ValueError("Must provide 'custom_extractor' for type='custom'")
         return custom_extractor
-    
+
+    elif extractor_type is None:
+        return IdentityExtractor(input_dim)
+
     else:
         raise ValueError(f"Unknown extractor_type: {extractor_type}. "
                         f"Choose from: 'fc', 'fcbn', 'resnet', 'attention', "
-                        f"'direct_attention', 'attention_weighted', 'custom'")
+                        f"'direct_attention', 'attention_weighted', 'custom', or None")
 
 
 # ============================================================================

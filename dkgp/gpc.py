@@ -247,15 +247,19 @@ class DeepKernelGPClassifier(nn.Module):
         
         if hidden_dims is None:
             hidden_dims = [256, 128, 64]
-        
+
         if extractor_kwargs is None:
             extractor_kwargs = {}
-        
+
+        # extractor_type=None → standard GP: identity extractor, GP lives in input space
+        if extractor_type is None:
+            feature_dim = input_dim
+
         self.num_classes = num_classes
         self.input_dim = input_dim
         self.feature_dim = feature_dim
         self.extractor_type = extractor_type
-        
+
         # Feature extractor
         self.feature_extractor = get_feature_extractor(
             extractor_type=extractor_type,
@@ -530,11 +534,13 @@ def train_dkgp_classifier(
     model.confidence_weights = confidence_weights
     model.register_buffer('_confidence_weights', confidence_weights)
     
-    # Optimizer
-    optimizer = torch.optim.Adam([
-        {'params': model.feature_extractor.parameters(), 'lr': lr_features},
-        {'params': model.gp_model.parameters(), 'lr': lr_gp}
-    ])
+    # Optimizer — skip feature extractor group when it has no parameters (extractor_type=None)
+    has_extractor_params = len(list(model.feature_extractor.parameters())) > 0
+    param_groups = []
+    if has_extractor_params:
+        param_groups.append({'params': model.feature_extractor.parameters(), 'lr': lr_features})
+    param_groups.append({'params': model.gp_model.parameters(), 'lr': lr_gp})
+    optimizer = torch.optim.Adam(param_groups)
     
     # Select ELBO
     if use_confidence_weighted:
@@ -561,11 +567,14 @@ def train_dkgp_classifier(
     patience_counter = 0
     
     if verbose:
-        print(f"\nTraining Deep Kernel GP Classifier")
+        if extractor_type is None:
+            print(f"\nTraining Standard GP Classifier (no deep kernel)")
+        else:
+            print(f"\nTraining Deep Kernel GP Classifier")
         print("=" * 60)
         print(f"  Device: {device}")
-        print(f"  Extractor type: {extractor_type}")
-        print(f"  Input dim: {input_dim} → Feature dim: {feature_dim}")
+        print(f"  Extractor type: {extractor_type if extractor_type is not None else 'None (standard GP)'}")
+        print(f"  Input dim: {input_dim} → Feature dim: {model.feature_dim}")
         print(f"  Classes: {num_classes}")
         print(f"  Samples: {len(datapoints)}")
         print(f"  Inducing points: {num_inducing}")
@@ -715,8 +724,11 @@ def fit_dkgp_classifier(
     
     if verbose:
         print("=" * 60)
-        print("Training Deep Kernel GP Classifier")
-        print(f"Feature Extractor: {extractor_type}")
+        if extractor_type is None:
+            print("Training Standard GP Classifier (no deep kernel)")
+        else:
+            print("Training Deep Kernel GP Classifier")
+            print(f"Feature Extractor: {extractor_type}")
         print("=" * 60)
     
     input_dim = X_train.shape[-1]
@@ -746,7 +758,7 @@ def fit_dkgp_classifier(
         plt.plot(losses, linewidth=2, color='#2E86AB')
         plt.xlabel('Epoch', fontsize=12)
         plt.ylabel('Negative ELBO', fontsize=12)
-        plt.title(f'Training Loss ({extractor_type} extractor)', fontsize=14, fontweight='bold')
+        plt.title(f'Training Loss ({extractor_type if extractor_type is not None else "standard GP"})', fontsize=14, fontweight='bold')
         plt.grid(True, alpha=0.3, linestyle='--')
         plt.tight_layout()
         plt.show()

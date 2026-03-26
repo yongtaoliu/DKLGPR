@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "dkgp"
-version = "0.2.0"
-description = "Deep Kernel Gaussian Process Regression and Classification"
+name = "engage-gp"
+version = "0.1.0"
+description = "ENGAGE: Explainable Neural GP with Active Guided Exploration — human-guided, interpretable deep kernel Gaussian processes with active learning"
 readme = "README.md"
 authors = [
     {name = "Yongtao Liu", email = "youngtaoliu@gmail.com"}
@@ -14,9 +14,6 @@ requires-python = ">=3.8"
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -30,6 +27,12 @@ keywords = [
     "bayesian-optimization",
     "machine-learning",
     "deep-kernel-learning",
+    "active-learning",
+    "human-in-the-loop",
+    "interpretable-machine-learning",
+    "explainable-ai",
+    "preference-learning",
+    "uncertainty-quantification",
     "classification",
     "regression",
 ]
@@ -66,12 +69,12 @@ examples = [
     "tqdm>=4.60.0",
 ]
 all = [
-    "dkgp[dev,docs,examples]",
+    "engage-gp[dev,docs,examples]",
 ]
 
 [project.urls]
-Homepage = "https://github.com/yongtaoliu/DKGP"
-Repository = "https://github.com/yongtaoliu/DKGP"
+Homepage = "https://github.com/yongtaoliu/ENGAGE"
+Repository = "https://github.com/yongtaoliu/ENGAGE"
 
 [tool.setuptools.packages.find]
 where = ["."]
